@@ -54,7 +54,7 @@ if (!isset($_SESSION['admin'])) {
 </head>
 <body>
     <div class="dashboard-box">
-        <h1>Selamat datang, <?php echo htmlspecialchars($_SESSION['nama']); ?>!</h1>
+        <h1>Selamat datang, SELVIAAAAAA <?php echo htmlspecialchars($_SESSION['nama']); ?>!</h1>
         <p>Anda berhasil masuk ke dashboard. Gunakan tombol di bawah ini untuk keluar dari sesi.</p>
         <a class="logout-btn" href="logout.php">Logout</a>
     </div>
