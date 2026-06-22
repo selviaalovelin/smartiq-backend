@@ -21,9 +21,20 @@ $router->get('/', function () use ($router) {
 });
 
 $router->group(['prefix' => 'api'], function () use ($router) {
+    $router->post('/auth/register', 'AuthController@register');
+    $router->post('/auth/login', 'AuthController@login');
+
     $router->get('/quizzes', 'QuizController@index');
     $router->post('/quizzes', 'QuizController@store');
+    $router->get('/quizzes/pin/{pin}', 'QuizController@byPin');
     $router->get('/quizzes/{id}', 'QuizController@show');
     $router->put('/quizzes/{id}', 'QuizController@update');
     $router->delete('/quizzes/{id}', 'QuizController@destroy');
+    $router->get('/quizzes/{id}/participants', 'QuizController@participants');
+    $router->post('/quizzes/{id}/participants', 'QuizController@join');
+    $router->post('/quizzes/{id}/participants/{participantId}/answers', 'QuizController@answer');
+    $router->get('/quizzes/{id}/leaderboard', 'QuizController@leaderboard');
+
+    $router->get('/assignments', 'AssignmentController@index');
+    $router->post('/assignments', 'AssignmentController@store');
 });
