@@ -11,4 +11,19 @@ class Quiz extends Model
         'category',
         'pin',
     ];
+
+    public function questions()
+    {
+        return $this->hasMany(QuizQuestion::class)->orderBy('position');
+    }
+
+    public function assignments()
+    {
+        return $this->hasMany(QuizAssignment::class);
+    }
+
+    public function participants()
+    {
+        return $this->hasMany(QuizParticipant::class);
+    }
 }
