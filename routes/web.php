@@ -23,6 +23,7 @@ $router->get('/', function () use ($router) {
 $router->group(['prefix' => 'api'], function () use ($router) {
     $router->post('/auth/register', 'AuthController@register');
     $router->post('/auth/login', 'AuthController@login');
+    $router->post('/auth/logout', 'AuthController@logout');
 
     $router->get('/quizzes', 'QuizController@index');
     $router->post('/quizzes', 'QuizController@store');
@@ -30,6 +31,9 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->get('/quizzes/{id}', 'QuizController@show');
     $router->put('/quizzes/{id}', 'QuizController@update');
     $router->delete('/quizzes/{id}', 'QuizController@destroy');
+    $router->put('/quizzes/{id}/open', 'QuizController@open');
+    $router->put('/quizzes/{id}/start', 'QuizController@start');
+    $router->put('/quizzes/{id}/finish', 'QuizController@finish');
     $router->get('/quizzes/{id}/participants', 'QuizController@participants');
     $router->post('/quizzes/{id}/participants', 'QuizController@join');
     $router->post('/quizzes/{id}/participants/{participantId}/answers', 'QuizController@answer');

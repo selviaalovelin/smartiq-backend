@@ -11,19 +11,25 @@ use Illuminate\Support\Facades\DB;
 
 class QuizController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return response()->json(['data' => Quiz::with('questions')->latest()->get()]);
+        $user = $this->authenticatedUser($request);
+        return response()->json(['data' => $user->quizzes()->with('questions')->latest()->get()]);
     }
 
-    public function show($id)
+    public function show(Request $request, $id)
     {
-        return response()->json(['data' => Quiz::with('questions')->findOrFail($id)]);
+        return response()->json(['data' => $this->ownedQuiz($request, $id)->load('questions')]);
     }
 
     public function byPin($pin)
     {
-        return response()->json(['data' => Quiz::with('questions')->where('pin', $pin)->firstOrFail()]);
+        return response()->json([
+            'data' => Quiz::with('questions')
+                ->where('pin', $pin)
+                ->whereIn('status', ['waiting', 'started'])
+                ->firstOrFail(),
+        ]);
     }
 
     public function store(Request $request)
@@ -33,10 +39,13 @@ class QuizController extends Controller
             'category' => 'nullable|string|max:100',
         ]);
 
+        $user = $this->authenticatedUser($request);
         $quiz = Quiz::create([
+            'user_id' => $user->id,
             'title' => $request->input('title'),
             'category' => $request->input('category'),
             'pin' => $this->makePin(),
+            'status' => 'draft',
         ]);
 
         return response()->json([
@@ -47,7 +56,7 @@ class QuizController extends Controller
 
     public function update(Request $request, $id)
     {
-        $quiz = Quiz::findOrFail($id);
+        $quiz = $this->ownedQuiz($request, $id);
 
         $this->validate($request, [
             'title' => 'required|string|max:150',
@@ -90,9 +99,9 @@ class QuizController extends Controller
         ]);
     }
 
-    public function destroy($id)
+    public function destroy(Request $request, $id)
     {
-        Quiz::findOrFail($id)->delete();
+        $this->ownedQuiz($request, $id)->delete();
 
         return response()->json(['message' => 'Kuis berhasil dihapus.']);
     }
@@ -100,6 +109,9 @@ class QuizController extends Controller
     public function join(Request $request, $id)
     {
         $quiz = Quiz::with('questions')->findOrFail($id);
+        if (!in_array($quiz->status, ['waiting', 'started'], true)) {
+            abort(422, 'Kuis belum dibuka oleh pengajar.');
+        }
         $this->validate($request, ['name' => 'required|string|max:100']);
 
         $participant = QuizParticipant::create([
@@ -113,10 +125,40 @@ class QuizController extends Controller
         ], 201);
     }
 
-    public function participants($id)
+    public function participants(Request $request, $id)
     {
-        $quiz = Quiz::findOrFail($id);
+        $quiz = $this->ownedQuiz($request, $id);
         return response()->json(['data' => $quiz->participants()->latest()->get()]);
+    }
+
+    public function start(Request $request, $id)
+    {
+        $quiz = $this->ownedQuiz($request, $id);
+        if ($quiz->questions()->count() === 0) {
+            abort(422, 'Kuis belum memiliki soal.');
+        }
+        $quiz->update(['status' => 'started']);
+
+        return response()->json(['message' => 'Kuis dimulai.', 'data' => $quiz->fresh('questions')]);
+    }
+
+    public function open(Request $request, $id)
+    {
+        $quiz = $this->ownedQuiz($request, $id);
+        if ($quiz->questions()->count() === 0) {
+            abort(422, 'Kuis belum memiliki soal.');
+        }
+        $quiz->update(['status' => 'waiting']);
+
+        return response()->json(['message' => 'Ruang kuis dibuka.', 'data' => $quiz->fresh('questions')]);
+    }
+
+    public function finish(Request $request, $id)
+    {
+        $quiz = $this->ownedQuiz($request, $id);
+        $quiz->update(['status' => 'finished']);
+
+        return response()->json(['message' => 'Kuis selesai.', 'data' => $quiz]);
     }
 
     public function answer(Request $request, $id, $participantId)
