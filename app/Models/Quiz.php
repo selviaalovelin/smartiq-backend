@@ -7,10 +7,17 @@ use Illuminate\Database\Eloquent\Model;
 class Quiz extends Model
 {
     protected $fillable = [
+        'user_id',
         'title',
         'category',
         'pin',
+        'status',
     ];
+
+    public function user()
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function questions()
     {

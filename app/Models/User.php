@@ -19,7 +19,7 @@ class User extends Model implements AuthenticatableContract, AuthorizableContrac
      * @var string[]
      */
     protected $fillable = [
-        'name', 'email', 'password',
+        'name', 'email', 'password', 'api_token',
     ];
 
     /**
@@ -28,6 +28,11 @@ class User extends Model implements AuthenticatableContract, AuthorizableContrac
      * @var string[]
      */
     protected $hidden = [
-        'password',
+        'password', 'api_token',
     ];
+
+    public function quizzes()
+    {
+        return $this->hasMany(Quiz::class);
+    }
 }
