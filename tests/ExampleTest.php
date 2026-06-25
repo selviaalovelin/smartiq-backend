@@ -16,8 +16,10 @@ class ExampleTest extends TestCase
     {
         $this->get('/');
 
-        $this->assertEquals(
-            $this->app->version(), $this->response->getContent()
-        );
+        $this->seeStatusCode(200)
+            ->seeJson([
+                'name' => 'SMARTIQ Backend',
+                'framework' => $this->app->version(),
+            ]);
     }
 }
