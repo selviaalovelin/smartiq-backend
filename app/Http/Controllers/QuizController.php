@@ -145,8 +145,14 @@ class QuizController extends Controller
 
     public function participants(Request $request, $id)
     {
-        $quiz = $this->ownedQuiz($request, $id);
-        return response()->json(['data' => $quiz->participants()->latest()->get()]);
+        $quiz = $this->ownedQuiz($request, $id)->loadCount('questions');
+        $participants = $quiz->participants()
+            ->with('answers')
+            ->latest()
+            ->get()
+            ->map(fn ($participant) => $this->participantProgress($participant, $quiz->questions_count));
+
+        return response()->json(['data' => $participants]);
     }
 
     public function start(Request $request, $id)
@@ -166,6 +172,7 @@ class QuizController extends Controller
         if ($quiz->questions()->count() === 0) {
             abort(422, 'Kuis belum memiliki soal.');
         }
+        $quiz->participants()->delete();
         $quiz->update(['status' => 'waiting']);
 
         return response()->json(['message' => 'Ruang kuis dibuka.', 'data' => $quiz->fresh('questions')]);
@@ -211,9 +218,14 @@ class QuizController extends Controller
 
     public function leaderboard($id)
     {
-        $quiz = Quiz::findOrFail($id);
+        $quiz = Quiz::withCount('questions')->findOrFail($id);
         return response()->json([
-            'data' => $quiz->participants()->orderByDesc('score')->orderBy('created_at')->get(),
+            'data' => $quiz->participants()
+                ->with('answers')
+                ->orderByDesc('score')
+                ->orderBy('created_at')
+                ->get()
+                ->map(fn ($participant) => $this->participantProgress($participant, $quiz->questions_count)),
         ]);
     }
 
@@ -238,5 +250,26 @@ class QuizController extends Controller
 
         $payload = substr($image, strpos($image, ',') + 1);
         return base64_decode($payload, true) !== false;
+    }
+
+    private function participantProgress($participant, $totalQuestions)
+    {
+        $answeredCount = $participant->answers->count();
+        $correctCount = $participant->answers->where('is_correct', true)->count();
+        $wrongCount = $participant->answers->where('is_correct', false)->count();
+
+        return [
+            'id' => $participant->id,
+            'quiz_id' => $participant->quiz_id,
+            'name' => $participant->name,
+            'score' => $participant->score,
+            'answered_count' => $answeredCount,
+            'correct_count' => $correctCount,
+            'wrong_count' => $wrongCount,
+            'total_questions' => $totalQuestions,
+            'progress_percent' => $totalQuestions ? round(($answeredCount / $totalQuestions) * 100) : 0,
+            'created_at' => $participant->created_at,
+            'updated_at' => $participant->updated_at,
+        ];
     }
 }
