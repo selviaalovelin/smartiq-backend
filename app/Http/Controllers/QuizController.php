@@ -24,6 +24,10 @@ class QuizController extends Controller
 
     public function byPin($pin)
     {
+        if (!preg_match('/^\d{6}$/', $pin)) {
+            abort(422, 'PIN harus 6 digit angka.');
+        }
+
         return response()->json([
             'data' => Quiz::with('questions')
                 ->where('pin', $pin)
@@ -61,7 +65,7 @@ class QuizController extends Controller
         $this->validate($request, [
             'title' => 'required|string|max:150',
             'category' => 'nullable|string|max:100',
-            'questions' => 'nullable|array',
+            'questions' => 'nullable|array|max:50',
         ]);
 
         DB::transaction(function () use ($request, $quiz) {
@@ -73,6 +77,10 @@ class QuizController extends Controller
 
             $quiz->questions()->delete();
             foreach ($request->input('questions', []) as $index => $question) {
+                if (empty(trim($question['text'] ?? ''))) {
+                    abort(422, 'Pertanyaan wajib diisi.');
+                }
+
                 $answers = array_values($question['answers'] ?? []);
                 if (count($answers) !== 4 || in_array('', array_map('trim', $answers), true)) {
                     abort(422, 'Setiap soal harus memiliki empat jawaban.');
@@ -82,12 +90,22 @@ class QuizController extends Controller
                     abort(422, 'Jawaban benar tidak valid.');
                 }
 
+                $image = $question['image'] ?? null;
+                if ($image && !$this->isValidQuestionImage($image)) {
+                    abort(422, 'Gambar soal harus berupa JPG, PNG, WEBP, atau GIF dengan ukuran maksimal 2 MB.');
+                }
+
+                $timeLimit = (int) ($question['timeLimit'] ?? 10);
+                if ($timeLimit < 5 || $timeLimit > 300) {
+                    abort(422, 'Batas waktu soal harus 5 sampai 300 detik.');
+                }
+
                 $quiz->questions()->create([
                     'text' => trim($question['text'] ?? ''),
-                    'image' => $question['image'] ?? null,
-                    'answers' => $answers,
+                    'image' => $image,
+                    'answers' => array_map('trim', $answers),
                     'correct' => $question['correct'],
-                    'time_limit' => max(5, min(300, (int) ($question['timeLimit'] ?? 10))),
+                    'time_limit' => $timeLimit,
                     'position' => $index + 1,
                 ]);
             }
@@ -164,6 +182,10 @@ class QuizController extends Controller
     public function answer(Request $request, $id, $participantId)
     {
         $quiz = Quiz::findOrFail($id);
+        if ($quiz->status !== 'started') {
+            abort(422, 'Kuis belum dimulai atau sudah selesai.');
+        }
+
         $participant = $quiz->participants()->findOrFail($participantId);
 
         $this->validate($request, [
@@ -202,5 +224,19 @@ class QuizController extends Controller
         } while (Quiz::where('pin', $pin)->exists());
 
         return $pin;
+    }
+
+    private function isValidQuestionImage($image)
+    {
+        if (!is_string($image) || strlen($image) > 2800000) {
+            return false;
+        }
+
+        if (!preg_match('/^data:image\/(jpeg|jpg|png|webp|gif);base64,/', $image)) {
+            return false;
+        }
+
+        $payload = substr($image, strpos($image, ',') + 1);
+        return base64_decode($payload, true) !== false;
     }
 }

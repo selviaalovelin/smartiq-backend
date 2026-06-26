@@ -13,7 +13,7 @@ class AuthController extends Controller
     {
         $this->validate($request, [
             'email' => 'required|email|max:150|unique:users,email',
-            'password' => 'required|string|min:8',
+            'password' => 'required|string|min:8|max:100',
         ]);
 
         $email = strtolower(trim($request->input('email')));
@@ -34,8 +34,8 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $this->validate($request, [
-            'email' => 'required|email',
-            'password' => 'required|string',
+            'email' => 'required|email|max:150',
+            'password' => 'required|string|min:8|max:100',
         ]);
 
         $user = User::where('email', strtolower(trim($request->input('email'))))->first();
