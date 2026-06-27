@@ -125,6 +125,10 @@ class QuizFlowTest extends TestCase
         $this->json('GET', '/api/assignments/'.$assignment['id'].'/participants', [], $headers)
             ->seeStatusCode(200)
             ->seeJson(['name' => 'Peserta Tugas', 'score' => 1]);
+
+        $this->get('/api/quizzes/'.$quiz['id'].'/leaderboard')
+            ->seeStatusCode(200)
+            ->seeJson(['data' => []]);
     }
 
     public function test_complete_live_quiz_flow()

@@ -186,6 +186,21 @@ class QuizController extends Controller
         return response()->json(['message' => 'Kuis selesai.', 'data' => $quiz]);
     }
 
+    public function deleteLiveReport(Request $request, $id)
+    {
+        $quiz = $this->ownedQuiz($request, $id);
+
+        $quiz->participants()->whereNull('assignment_id')->delete();
+        if ($quiz->status === 'finished') {
+            $quiz->update(['status' => 'draft']);
+        }
+
+        return response()->json([
+            'message' => 'Laporan live berhasil dihapus.',
+            'data' => $quiz->fresh('questions'),
+        ]);
+    }
+
     public function answer(Request $request, $id, $participantId)
     {
         $quiz = Quiz::findOrFail($id);
@@ -225,6 +240,7 @@ class QuizController extends Controller
         $quiz = Quiz::withCount('questions')->findOrFail($id);
         return response()->json([
             'data' => $quiz->participants()
+                ->whereNull('assignment_id')
                 ->with('answers')
                 ->orderByDesc('score')
                 ->orderBy('created_at')
