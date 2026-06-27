@@ -77,4 +77,16 @@ class AssignmentController extends Controller
 
         return response()->json(['data' => $participants]);
     }
+
+    public function destroy(Request $request, $id)
+    {
+        $user = $this->authenticatedUser($request);
+        $assignment = QuizAssignment::whereHas('quiz', fn ($query) => $query->where('user_id', $user->id))
+            ->findOrFail($id);
+
+        $assignment->participants()->delete();
+        $assignment->delete();
+
+        return response()->json(['message' => 'Laporan tugas berhasil dihapus.']);
+    }
 }

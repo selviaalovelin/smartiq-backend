@@ -36,6 +36,7 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->put('/quizzes/{id}/open', 'QuizController@open');
     $router->put('/quizzes/{id}/start', 'QuizController@start');
     $router->put('/quizzes/{id}/finish', 'QuizController@finish');
+    $router->delete('/quizzes/{id}/live-report', 'QuizController@deleteLiveReport');
     $router->get('/quizzes/{id}/participants', 'QuizController@participants');
     $router->post('/quizzes/{id}/participants', 'QuizController@join');
     $router->post('/quizzes/{id}/participants/{participantId}/answers', 'QuizController@answer');
@@ -44,4 +45,5 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->get('/assignments', 'AssignmentController@index');
     $router->post('/assignments', 'AssignmentController@store');
     $router->get('/assignments/{id}/participants', 'AssignmentController@participants');
+    $router->delete('/assignments/{id}', 'AssignmentController@destroy');
 });
