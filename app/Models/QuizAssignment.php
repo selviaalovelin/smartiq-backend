@@ -20,4 +20,9 @@ class QuizAssignment extends Model
     {
         return $this->belongsTo(Quiz::class);
     }
+
+    public function participants()
+    {
+        return $this->hasMany(QuizParticipant::class, 'assignment_id');
+    }
 }
