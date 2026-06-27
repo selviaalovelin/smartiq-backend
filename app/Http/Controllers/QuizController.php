@@ -240,6 +240,7 @@ class QuizController extends Controller
         $quiz = Quiz::withCount('questions')->findOrFail($id);
         return response()->json([
             'data' => $quiz->participants()
+                ->whereNull('assignment_id')
                 ->with('answers')
                 ->orderByDesc('score')
                 ->orderBy('created_at')
