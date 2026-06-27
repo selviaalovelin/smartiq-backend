@@ -24,6 +24,8 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->post('/auth/register', 'AuthController@register');
     $router->post('/auth/login', 'AuthController@login');
     $router->post('/auth/logout', 'AuthController@logout');
+    $router->post('/auth/forgot-password', 'AuthController@forgotPassword');
+    $router->post('/auth/reset-password', 'AuthController@resetPassword');
 
     $router->get('/quizzes', 'QuizController@index');
     $router->post('/quizzes', 'QuizController@store');
@@ -41,4 +43,5 @@ $router->group(['prefix' => 'api'], function () use ($router) {
 
     $router->get('/assignments', 'AssignmentController@index');
     $router->post('/assignments', 'AssignmentController@store');
+    $router->get('/assignments/{id}/participants', 'AssignmentController@participants');
 });
