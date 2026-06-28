@@ -13,7 +13,7 @@ return new class extends Migration
             $table->unsignedBigInteger('quiz_id');
             $table->text('text');
             $table->longText('image')->nullable();
-            $table->longText('answers');
+            $table->json('answers');
             $table->char('correct', 1);
             $table->unsignedSmallInteger('time_limit')->default(10);
             $table->unsignedInteger('position')->default(1);

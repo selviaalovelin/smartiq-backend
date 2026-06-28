@@ -2,8 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Quiz;
 use App\Models\QuizAssignment;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 
 class AssignmentController extends Controller
 {
@@ -11,7 +13,8 @@ class AssignmentController extends Controller
     {
         $user = $this->authenticatedUser($request);
         return response()->json([
-            'data' => QuizAssignment::with('quiz')
+            'message' => 'Data tugas berhasil diambil.',
+            'data' => QuizAssignment::with('quiz.questions')
                 ->whereHas('quiz', fn ($query) => $query->where('user_id', $user->id))
                 ->latest()
                 ->get(),
@@ -26,8 +29,13 @@ class AssignmentController extends Controller
             'deadline' => 'required|date|after:now',
             'host' => 'nullable|string|max:100',
         ]);
-        if (!$user->quizzes()->whereKey($request->input('quiz_id'))->exists()) {
-            abort(404);
+
+        $quiz = Quiz::find($request->input('quiz_id'));
+        if (!$quiz) {
+            abort(404, 'Data kuis tidak ditemukan.');
+        }
+        if ((int) $quiz->user_id !== (int) $user->id) {
+            abort(403, 'Anda tidak memiliki akses ke kuis ini.');
         }
 
         $assignment = QuizAssignment::create([
@@ -38,16 +46,43 @@ class AssignmentController extends Controller
 
         return response()->json([
             'message' => 'Tugas kuis berhasil dibuat.',
-            'data' => $assignment->load('quiz'),
+            'data' => $assignment->load('quiz.questions'),
         ], 201);
+    }
+
+    public function destroy(Request $request, $id)
+    {
+        $user = $this->authenticatedUser($request);
+        $assignment = QuizAssignment::with('quiz')->find($id);
+
+        if (!$assignment) {
+            abort(404, 'Data tugas tidak ditemukan.');
+        }
+        if ((int) $assignment->quiz->user_id !== (int) $user->id) {
+            abort(403, 'Anda tidak memiliki akses ke data tugas ini.');
+        }
+
+        DB::transaction(function () use ($assignment) {
+            $assignment->participants()->delete();
+            $assignment->delete();
+        });
+
+        return response()->json([
+            'message' => 'Tugas kuis berhasil dihapus.',
+        ]);
     }
 
     public function participants(Request $request, $id)
     {
         $user = $this->authenticatedUser($request);
-        $assignment = QuizAssignment::with('quiz')
-            ->whereHas('quiz', fn ($query) => $query->where('user_id', $user->id))
-            ->findOrFail($id);
+        $assignment = QuizAssignment::with('quiz')->find($id);
+
+        if (!$assignment) {
+            abort(404, 'Data tugas tidak ditemukan.');
+        }
+        if ((int) $assignment->quiz->user_id !== (int) $user->id) {
+            abort(403, 'Anda tidak memiliki akses ke data tugas ini.');
+        }
 
         $totalQuestions = $assignment->quiz->questions()->count();
         $participants = $assignment->participants()
@@ -75,7 +110,10 @@ class AssignmentController extends Controller
                 ];
             });
 
-        return response()->json(['data' => $participants]);
+        return response()->json([
+            'message' => 'Data peserta tugas berhasil diambil.',
+            'data' => $participants,
+        ]);
     }
 
     public function destroy(Request $request, $id)

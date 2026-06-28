@@ -1,4 +1,5 @@
 /vendor
+/.codegraph
 /.idea
 Homestead.json
 Homestead.yaml

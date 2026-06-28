@@ -32,6 +32,7 @@ $router->group(['prefix' => 'api'], function () use ($router) {
     $router->get('/quizzes/pin/{pin}', 'QuizController@byPin');
     $router->get('/quizzes/{id}', 'QuizController@show');
     $router->put('/quizzes/{id}', 'QuizController@update');
+    $router->delete('/quizzes/{id}/live-report', 'QuizController@deleteLiveReport');
     $router->delete('/quizzes/{id}', 'QuizController@destroy');
     $router->put('/quizzes/{id}/open', 'QuizController@open');
     $router->put('/quizzes/{id}/start', 'QuizController@start');
@@ -44,6 +45,7 @@ $router->group(['prefix' => 'api'], function () use ($router) {
 
     $router->get('/assignments', 'AssignmentController@index');
     $router->post('/assignments', 'AssignmentController@store');
+    $router->delete('/assignments/{id}', 'AssignmentController@destroy');
     $router->get('/assignments/{id}/participants', 'AssignmentController@participants');
     $router->delete('/assignments/{id}', 'AssignmentController@destroy');
 });

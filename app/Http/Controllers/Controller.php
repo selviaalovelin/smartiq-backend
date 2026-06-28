@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Quiz;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Laravel\Lumen\Routing\Controller as BaseController;
@@ -25,6 +26,17 @@ class Controller extends BaseController
 
     protected function ownedQuiz(Request $request, $id)
     {
-        return $this->authenticatedUser($request)->quizzes()->findOrFail($id);
+        $user = $this->authenticatedUser($request);
+        $quiz = Quiz::find($id);
+
+        if (!$quiz) {
+            abort(404, 'Data kuis tidak ditemukan.');
+        }
+
+        if ((int) $quiz->user_id !== (int) $user->id) {
+            abort(403, 'Anda tidak memiliki akses ke kuis ini.');
+        }
+
+        return $quiz;
     }
 }

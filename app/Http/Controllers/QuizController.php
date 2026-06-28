@@ -6,47 +6,70 @@ use App\Models\Quiz;
 use App\Models\QuizAnswer;
 use App\Models\QuizAssignment;
 use App\Models\QuizParticipant;
-use App\Models\QuizQuestion;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 
 class QuizController extends Controller
 {
     public function index(Request $request)
     {
         $user = $this->authenticatedUser($request);
-        return response()->json(['data' => $user->quizzes()->with('questions')->latest()->get()]);
+        return response()->json([
+            'message' => 'Data kuis berhasil diambil.',
+            'data' => $user->quizzes()->with('questions')->latest()->get(),
+        ]);
     }
 
     public function show(Request $request, $id)
     {
-        return response()->json(['data' => $this->ownedQuiz($request, $id)->load('questions')]);
+        $quiz = $this->ownedQuiz($request, $id);
+        return response()->json([
+            'message' => 'Data kuis berhasil diambil.',
+            'data' => $quiz->load('questions'),
+        ]);
     }
 
-    public function byPin($pin)
+    public function byPin(Request $request, $pin)
     {
         if (!preg_match('/^\d{6}$/', $pin)) {
-            abort(422, 'PIN harus 6 digit angka.');
+            throw ValidationException::withMessages([
+                'pin' => ['PIN harus 6 digit angka.'],
+            ]);
         }
 
-        $assignmentId = app('request')->query('assignment_id');
+        $assignmentId = $request->query('assignment_id');
         if ($assignmentId) {
             $assignment = QuizAssignment::with('quiz.questions')
                 ->whereHas('quiz', fn ($query) => $query->where('pin', $pin))
-                ->findOrFail($assignmentId);
+                ->find($assignmentId);
+
+            if (!$assignment) {
+                abort(404, 'Tugas kuis tidak ditemukan.');
+            }
 
             if ($assignment->deadline && strtotime($assignment->deadline) < time()) {
                 abort(422, 'Batas waktu tugas sudah berakhir.');
             }
 
-            return response()->json(['data' => $assignment->quiz]);
+            return response()->json([
+                'message' => 'Data kuis berhasil ditemukan.',
+                'data' => $assignment->quiz,
+            ]);
+        }
+
+        $quiz = Quiz::with('questions')->where('pin', $pin)->first();
+        if (!$quiz) {
+            abort(404, 'Kuis tidak ditemukan.');
+        }
+
+        if (!in_array($quiz->status, ['waiting', 'started'], true)) {
+            abort(422, 'Kuis belum dibuka oleh pengajar atau sudah selesai.');
         }
 
         return response()->json([
-            'data' => Quiz::with('questions')
-                ->where('pin', $pin)
-                ->whereIn('status', ['waiting', 'started'])
-                ->firstOrFail(),
+            'message' => 'Data kuis berhasil ditemukan.',
+            'data' => $quiz,
         ]);
     }
 
@@ -62,8 +85,8 @@ class QuizController extends Controller
         $quiz = DB::transaction(function () use ($request, $user) {
             $quiz = Quiz::create([
                 'user_id' => $user->id,
-                'title' => $request->input('title'),
-                'category' => $request->input('category'),
+                'title' => trim($request->input('title')),
+                'category' => $request->input('category') ? trim($request->input('category')) : null,
                 'pin' => $this->makePin(),
                 'status' => 'draft',
             ]);
@@ -92,7 +115,10 @@ class QuizController extends Controller
         ]);
 
         DB::transaction(function () use ($request, $quiz) {
-            $quiz->update($request->only(['title', 'category']));
+            $quiz->update([
+                'title' => trim($request->input('title')),
+                'category' => $request->input('category') ? trim($request->input('category')) : null,
+            ]);
 
             if (!$request->has('questions')) {
                 return;
@@ -110,19 +136,42 @@ class QuizController extends Controller
 
     public function destroy(Request $request, $id)
     {
-        $this->ownedQuiz($request, $id)->delete();
+        $quiz = $this->ownedQuiz($request, $id);
+        $quiz->delete();
 
         return response()->json(['message' => 'Kuis berhasil dihapus.']);
     }
 
+    public function deleteLiveReport(Request $request, $id)
+    {
+        $quiz = $this->ownedQuiz($request, $id);
+
+        DB::transaction(function () use ($quiz) {
+            $quiz->participants()->whereNull('assignment_id')->delete();
+            $quiz->update(['status' => 'draft']);
+        });
+
+        return response()->json([
+            'message' => 'Laporan kuis live berhasil dihapus.',
+            'data' => $quiz->fresh('questions'),
+        ]);
+    }
+
     public function join(Request $request, $id)
     {
-        $quiz = Quiz::with('questions')->findOrFail($id);
+        $quiz = Quiz::find($id);
+        if (!$quiz) {
+            abort(404, 'Kuis tidak ditemukan.');
+        }
+
         $this->validate($request, ['name' => 'required|string|max:100']);
 
         $assignmentId = $request->input('assignment_id');
         if ($assignmentId) {
-            $assignment = QuizAssignment::where('quiz_id', $quiz->id)->findOrFail($assignmentId);
+            $assignment = QuizAssignment::where('quiz_id', $quiz->id)->find($assignmentId);
+            if (!$assignment) {
+                abort(404, 'Tugas kuis tidak ditemukan.');
+            }
             if ($assignment->deadline && strtotime($assignment->deadline) < time()) {
                 abort(422, 'Batas waktu tugas sudah berakhir.');
             }
@@ -134,11 +183,15 @@ class QuizController extends Controller
             'quiz_id' => $quiz->id,
             'assignment_id' => $assignmentId ?: null,
             'name' => trim($request->input('name')),
+            'score' => 0,
         ]);
 
         return response()->json([
             'message' => 'Peserta berhasil bergabung.',
-            'data' => ['quiz' => $quiz, 'participant' => $participant],
+            'data' => [
+                'quiz' => $quiz->load('questions'),
+                'participant' => $participant,
+            ],
         ], 201);
     }
 
@@ -152,7 +205,10 @@ class QuizController extends Controller
             ->get()
             ->map(fn ($participant) => $this->participantProgress($participant, $quiz->questions_count));
 
-        return response()->json(['data' => $participants]);
+        return response()->json([
+            'message' => 'Data peserta kuis berhasil diambil.',
+            'data' => $participants,
+        ]);
     }
 
     public function start(Request $request, $id)
@@ -163,7 +219,10 @@ class QuizController extends Controller
         }
         $quiz->update(['status' => 'started']);
 
-        return response()->json(['message' => 'Kuis dimulai.', 'data' => $quiz->fresh('questions')]);
+        return response()->json([
+            'message' => 'Kuis dimulai.',
+            'data' => $quiz->fresh('questions'),
+        ]);
     }
 
     public function open(Request $request, $id)
@@ -175,7 +234,10 @@ class QuizController extends Controller
         $quiz->participants()->whereNull('assignment_id')->delete();
         $quiz->update(['status' => 'waiting']);
 
-        return response()->json(['message' => 'Ruang kuis dibuka.', 'data' => $quiz->fresh('questions')]);
+        return response()->json([
+            'message' => 'Ruang kuis dibuka.',
+            'data' => $quiz->fresh('questions'),
+        ]);
     }
 
     public function finish(Request $request, $id)
@@ -183,7 +245,10 @@ class QuizController extends Controller
         $quiz = $this->ownedQuiz($request, $id);
         $quiz->update(['status' => 'finished']);
 
-        return response()->json(['message' => 'Kuis selesai.', 'data' => $quiz]);
+        return response()->json([
+            'message' => 'Kuis selesai.',
+            'data' => $quiz->fresh('questions'),
+        ]);
     }
 
     public function deleteLiveReport(Request $request, $id)
@@ -203,10 +268,21 @@ class QuizController extends Controller
 
     public function answer(Request $request, $id, $participantId)
     {
-        $quiz = Quiz::findOrFail($id);
-        $participant = $quiz->participants()->findOrFail($participantId);
+        $quiz = Quiz::find($id);
+        if (!$quiz) {
+            abort(404, 'Kuis tidak ditemukan.');
+        }
+
+        $participant = $quiz->participants()->find($participantId);
+        if (!$participant) {
+            abort(404, 'Peserta tidak ditemukan.');
+        }
+
         if ($participant->assignment_id) {
-            $assignment = QuizAssignment::findOrFail($participant->assignment_id);
+            $assignment = QuizAssignment::find($participant->assignment_id);
+            if (!$assignment) {
+                abort(404, 'Tugas kuis tidak ditemukan.');
+            }
             if ($assignment->deadline && strtotime($assignment->deadline) < time()) {
                 abort(422, 'Batas waktu tugas sudah berakhir.');
             }
@@ -219,7 +295,11 @@ class QuizController extends Controller
             'selected_option' => 'required|in:A,B,C,D',
         ]);
 
-        $question = $quiz->questions()->findOrFail($request->input('question_id'));
+        $question = $quiz->questions()->find($request->input('question_id'));
+        if (!$question) {
+            abort(404, 'Soal kuis tidak ditemukan.');
+        }
+
         $isCorrect = $question->correct === $request->input('selected_option');
 
         QuizAnswer::updateOrCreate(
@@ -231,14 +311,23 @@ class QuizController extends Controller
         $participant->save();
 
         return response()->json([
-            'data' => ['is_correct' => $isCorrect, 'score' => $participant->score],
+            'message' => 'Jawaban berhasil disimpan.',
+            'data' => [
+                'is_correct' => $isCorrect,
+                'score' => $participant->score,
+            ],
         ]);
     }
 
     public function leaderboard($id)
     {
-        $quiz = Quiz::withCount('questions')->findOrFail($id);
+        $quiz = Quiz::withCount('questions')->find($id);
+        if (!$quiz) {
+            abort(404, 'Kuis tidak ditemukan.');
+        }
+
         return response()->json([
+            'message' => 'Data papan peringkat berhasil diambil.',
             'data' => $quiz->participants()
                 ->whereNull('assignment_id')
                 ->with('answers')
@@ -260,7 +349,11 @@ class QuizController extends Controller
 
     private function isValidQuestionImage($image)
     {
-        if (!is_string($image) || strlen($image) > 2800000) {
+        if (!is_string($image) || empty($image)) {
+            return true;
+        }
+
+        if (strlen($image) > 2800000) {
             return false;
         }
 
@@ -269,38 +362,50 @@ class QuizController extends Controller
         }
 
         $payload = substr($image, strpos($image, ',') + 1);
-        return base64_decode($payload, true) !== false;
+        $decoded = base64_decode($payload, true);
+        return $decoded !== false && strlen($decoded) <= 2 * 1024 * 1024;
     }
 
     private function saveQuestions(Quiz $quiz, array $questions)
     {
         foreach ($questions as $index => $question) {
-            if (empty(trim($question['text'] ?? ''))) {
-                abort(422, 'Pertanyaan wajib diisi.');
+            $text = trim($question['text'] ?? '');
+            if (empty($text)) {
+                throw ValidationException::withMessages([
+                    "questions.{$index}.text" => ['Pertanyaan wajib diisi.'],
+                ]);
             }
 
             $answers = array_values($question['answers'] ?? []);
             if (count($answers) !== 4 || in_array('', array_map('trim', $answers), true)) {
-                abort(422, 'Setiap soal harus memiliki empat jawaban.');
+                throw ValidationException::withMessages([
+                    "questions.{$index}.answers" => ['Setiap soal harus memiliki empat jawaban.'],
+                ]);
             }
 
             if (!in_array($question['correct'] ?? '', ['A', 'B', 'C', 'D'], true)) {
-                abort(422, 'Jawaban benar tidak valid.');
+                throw ValidationException::withMessages([
+                    "questions.{$index}.correct" => ['Jawaban benar tidak valid.'],
+                ]);
             }
 
             $image = $question['image'] ?? null;
-            if ($image && !$this->isValidQuestionImage($image)) {
-                abort(422, 'Gambar soal harus berupa JPG, PNG, WEBP, atau GIF dengan ukuran maksimal 2 MB.');
+            if ($image !== null && $image !== '' && !$this->isValidQuestionImage($image)) {
+                throw ValidationException::withMessages([
+                    "questions.{$index}.image" => ['Gambar soal harus berupa JPG, PNG, WEBP, atau GIF dengan ukuran maksimal 2 MB.'],
+                ]);
             }
 
             $timeLimit = (int) ($question['timeLimit'] ?? 10);
             if ($timeLimit < 5 || $timeLimit > 300) {
-                abort(422, 'Batas waktu soal harus 5 sampai 300 detik.');
+                throw ValidationException::withMessages([
+                    "questions.{$index}.timeLimit" => ['Batas waktu soal harus 5 sampai 300 detik.'],
+                ]);
             }
 
             $quiz->questions()->create([
-                'text' => trim($question['text'] ?? ''),
-                'image' => $image,
+                'text' => $text,
+                'image' => ($image !== '') ? $image : null,
                 'answers' => array_map('trim', $answers),
                 'correct' => $question['correct'],
                 'time_limit' => $timeLimit,
@@ -318,6 +423,7 @@ class QuizController extends Controller
         return [
             'id' => $participant->id,
             'quiz_id' => $participant->quiz_id,
+            'assignment_id' => $participant->assignment_id,
             'name' => $participant->name,
             'score' => $participant->score,
             'answered_count' => $answeredCount,

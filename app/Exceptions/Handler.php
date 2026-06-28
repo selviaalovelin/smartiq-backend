@@ -49,6 +49,48 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Throwable $exception)
     {
+        if ($request->is('api/*') || $request->wantsJson()) {
+            if ($exception instanceof ValidationException) {
+                return response()->json([
+                    'message' => 'Data yang diberikan tidak valid.',
+                    'errors' => $exception->errors(),
+                ], 422);
+            }
+
+            if ($exception instanceof ModelNotFoundException) {
+                return response()->json([
+                    'message' => 'Data tidak ditemukan.',
+                ], 404);
+            }
+
+            if ($exception instanceof AuthorizationException) {
+                return response()->json([
+                    'message' => $exception->getMessage() ?: 'Anda tidak memiliki akses.',
+                ], 403);
+            }
+
+            if ($exception instanceof HttpException) {
+                $status = $exception->getStatusCode();
+                $message = $exception->getMessage();
+
+                if (!$message) {
+                    $message = match ($status) {
+                        401 => 'Silakan masuk terlebih dahulu.',
+                        403 => 'Anda tidak memiliki akses.',
+                        404 => 'Data tidak ditemukan.',
+                        422 => 'Data yang diberikan tidak valid.',
+                        default => 'Terjadi kesalahan.',
+                    };
+                }
+
+                return response()->json(['message' => $message], $status);
+            }
+
+            return response()->json([
+                'message' => env('APP_DEBUG', false) ? $exception->getMessage() : 'Terjadi kesalahan pada server.',
+            ], 500);
+        }
+
         return parent::render($request, $exception);
     }
 }

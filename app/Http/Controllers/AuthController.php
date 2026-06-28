@@ -137,16 +137,25 @@ class AuthController extends Controller
 
     private function sendResetLink($email, $resetUrl)
     {
-        $subject = 'Reset Kata Sandi SMARTQ';
-        $message = "Halo,\n\nKlik link berikut untuk mengganti kata sandi SMARTQ:\n{$resetUrl}\n\nLink ini berlaku selama 1 jam.\nJika Anda tidak meminta reset, abaikan email ini.";
-        $from = env('MAIL_FROM_ADDRESS', 'no-reply@smartq.local');
-        $headers = "From: SMARTQ <{$from}>\r\nContent-Type: text/plain; charset=UTF-8";
+        $logPath = storage_path('logs/password-reset.log');
+        $logEntry = '['.date('Y-m-d H:i:s')."] {$email} {$resetUrl}\n";
 
-        $sent = @mail($email, $subject, $message, $headers);
+        if (!file_exists(dirname($logPath))) {
+            mkdir(dirname($logPath), 0755, true);
+        }
+        file_put_contents($logPath, $logEntry, FILE_APPEND);
 
-        if (!$sent || env('APP_DEBUG', false)) {
-            $logPath = storage_path('logs/password-reset.log');
-            file_put_contents($logPath, '['.date('Y-m-d H:i:s')."] {$email} {$resetUrl}\n", FILE_APPEND);
+        try {
+            $subject = 'Reset Kata Sandi SMARTIQ';
+            $message = "Halo,\n\nKlik link berikut untuk mengganti kata sandi SMARTIQ:\n{$resetUrl}\n\nLink ini berlaku selama 1 jam.\nJika Anda tidak meminta reset, abaikan email ini.";
+            $from = env('MAIL_FROM_ADDRESS', 'no-reply@smartiq.local');
+            $headers = "From: SMARTIQ <{$from}>\r\nContent-Type: text/plain; charset=UTF-8";
+
+            if (function_exists('mail') && env('MAIL_HOST')) {
+                @mail($email, $subject, $message, $headers);
+            }
+        } catch (\Throwable $e) {
+            // Silently handled as reset link is logged
         }
     }
 }

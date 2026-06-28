@@ -209,4 +209,25 @@ class QuizFlowTest extends TestCase
         $this->json('GET', '/api/quizzes', [], $headers)
             ->seeStatusCode(401);
     }
+
+    public function test_teacher_cannot_access_or_modify_other_teacher_quiz()
+    {
+        // Teacher 1 creates a quiz
+        $email1 = 'teacher1+'.uniqid().'@smartq.test';
+        $this->json('POST', '/api/auth/register', ['email' => $email1, 'password' => 'password123'])->seeStatusCode(201);
+        $token1 = json_decode($this->response->getContent(), true)['data']['token'];
+
+        $this->json('POST', '/api/quizzes', ['title' => 'Quiz Teacher 1', 'category' => 'Test'], ['Authorization' => 'Bearer '.$token1])->seeStatusCode(201);
+        $quiz = json_decode($this->response->getContent(), true)['data'];
+
+        // Teacher 2 attempts to access/modify Teacher 1's quiz
+        $email2 = 'teacher2+'.uniqid().'@smartq.test';
+        $this->json('POST', '/api/auth/register', ['email' => $email2, 'password' => 'password123'])->seeStatusCode(201);
+        $token2 = json_decode($this->response->getContent(), true)['data']['token'];
+        $headers2 = ['Authorization' => 'Bearer '.$token2];
+
+        $this->json('GET', '/api/quizzes/'.$quiz['id'], [], $headers2)->seeStatusCode(403);
+        $this->json('PUT', '/api/quizzes/'.$quiz['id'], ['title' => 'Hacked Title'], $headers2)->seeStatusCode(403);
+        $this->json('DELETE', '/api/quizzes/'.$quiz['id'], [], $headers2)->seeStatusCode(403);
+    }
 }
