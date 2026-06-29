@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Validation\ValidationException;
 use Laravel\Lumen\Exceptions\Handler as ExceptionHandler;
 use Symfony\Component\HttpKernel\Exception\HttpException;
+use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
 class Handler extends ExceptionHandler
@@ -49,6 +50,26 @@ class Handler extends ExceptionHandler
      */
     public function render($request, Throwable $exception)
     {
+        if ($request->is('api/*')) {
+            if ($exception instanceof ValidationException) {
+                return response()->json([
+                    'message' => 'Data yang dikirim belum valid.',
+                    'errors' => $exception->errors(),
+                ], 422);
+            }
+
+            $statusCode = $exception instanceof HttpExceptionInterface
+                ? $exception->getStatusCode()
+                : ($exception instanceof ModelNotFoundException ? 404 : 500);
+
+            $message = $exception->getMessage();
+            if (!$message) {
+                $message = $statusCode === 404 ? 'Data tidak ditemukan.' : 'Terjadi kesalahan pada server.';
+            }
+
+            return response()->json(['message' => $message], $statusCode);
+        }
+
         return parent::render($request, $exception);
     }
 }
