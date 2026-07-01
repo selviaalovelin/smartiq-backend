@@ -13,6 +13,7 @@ class AuthController extends Controller
     public function register(Request $request)
     {
         $this->validate($request, [
+            'name' => 'sometimes|string|max:100',
             'email' => 'required|email|max:150|unique:users,email',
             'password' => 'required|string|min:8|max:100',
         ]);
@@ -20,7 +21,7 @@ class AuthController extends Controller
         $email = strtolower(trim($request->input('email')));
         $plainToken = Str::random(60);
         $user = User::create([
-            'name' => strstr($email, '@', true) ?: $email,
+            'name' => $request->input('name') ?: (strstr($email, '@', true) ?: $email),
             'email' => $email,
             'password' => Hash::make($request->input('password')),
             'api_token' => hash('sha256', $plainToken),
