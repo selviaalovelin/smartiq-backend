@@ -158,6 +158,9 @@ class QuizController extends Controller
     public function start(Request $request, $id)
     {
         $quiz = $this->ownedQuiz($request, $id);
+        if ($quiz->status !== 'waiting') {
+            abort(422, 'Kuis harus dalam status menunggu (waiting) sebelum dimulai.');
+        }
         if ($quiz->questions()->count() === 0) {
             abort(422, 'Kuis belum memiliki soal.');
         }
