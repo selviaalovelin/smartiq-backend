@@ -22,4 +22,23 @@ class ExampleTest extends TestCase
                 'framework' => $this->app->version(),
             ]);
     }
+
+    public function test_health_endpoint_returns_successful_response()
+    {
+        $this->get('/api/health');
+
+        $this->seeStatusCode(200)
+            ->seeJsonStructure([
+                'status',
+                'services' => [
+                    'database'
+                ]
+            ])
+            ->seeJson([
+                'status' => 'UP',
+                'services' => [
+                    'database' => 'UP'
+                ]
+            ]);
+    }
 }
