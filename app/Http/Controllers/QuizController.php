@@ -120,6 +120,11 @@ class QuizController extends Controller
         $quiz = Quiz::with('questions')->findOrFail($id);
         $this->validate($request, ['name' => 'required|string|max:100']);
 
+        $name = trim($request->input('name'));
+        if (empty($name)) {
+            abort(422, 'Nama tidak boleh kosong.');
+        }
+
         $assignmentId = $request->input('assignment_id');
         if ($assignmentId) {
             $assignment = QuizAssignment::where('quiz_id', $quiz->id)->findOrFail($assignmentId);
@@ -130,10 +135,19 @@ class QuizController extends Controller
             abort(422, 'Kuis belum dibuka oleh pengajar.');
         }
 
+        $existingParticipant = QuizParticipant::where('quiz_id', $quiz->id)
+            ->where('name', $name)
+            ->when($assignmentId, fn ($q) => $q->where('assignment_id', $assignmentId), fn ($q) => $q->whereNull('assignment_id'))
+            ->exists();
+
+        if ($existingParticipant) {
+            abort(422, 'Nama ini sudah digunakan oleh peserta lain.');
+        }
+
         $participant = QuizParticipant::create([
             'quiz_id' => $quiz->id,
             'assignment_id' => $assignmentId ?: null,
-            'name' => trim($request->input('name')),
+            'name' => $name,
         ]);
 
         return response()->json([
