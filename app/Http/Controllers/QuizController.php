@@ -344,15 +344,15 @@ class QuizController extends Controller
         $wrongCount = $participant->answers->where('is_correct', false)->count();
 
         return [
-            'id' => $participant->id,
-            'quiz_id' => $participant->quiz_id,
-            'name' => $participant->name,
-            'score' => $participant->score,
-            'answered_count' => $answeredCount,
-            'correct_count' => $correctCount,
-            'wrong_count' => $wrongCount,
-            'total_questions' => $totalQuestions,
-            'progress_percent' => $totalQuestions ? round(($answeredCount / $totalQuestions) * 100) : 0,
+            'id' => (int) $participant->id,
+            'quiz_id' => (int) $participant->quiz_id,
+            'name' => trim($participant->name),
+            'score' => (int) $participant->score,
+            'answered_count' => (int) $answeredCount,
+            'correct_count' => (int) $correctCount,
+            'wrong_count' => (int) $wrongCount,
+            'total_questions' => (int) $totalQuestions,
+            'progress_percent' => (int) ($totalQuestions ? round(($answeredCount / $totalQuestions) * 100) : 0),
             'created_at' => $participant->created_at,
             'updated_at' => $participant->updated_at,
         ];
