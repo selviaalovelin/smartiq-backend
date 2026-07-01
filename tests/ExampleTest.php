@@ -90,4 +90,66 @@ class ExampleTest extends TestCase
             'password' => 'short',
         ])->seeStatusCode(422);
     }
+
+    public function test_user_login_success()
+    {
+        $email = 'login_test_' . uniqid() . '@smartq.test';
+        
+        // First register the user
+        $this->json('POST', '/api/auth/register', [
+            'name' => 'M Fazri Riyadi',
+            'email' => $email,
+            'password' => 'password123',
+        ])->seeStatusCode(201);
+
+        // Try to log in
+        $this->json('POST', '/api/auth/login', [
+            'email' => $email,
+            'password' => 'password123',
+        ]);
+
+        $this->seeStatusCode(200)
+            ->seeJsonStructure([
+                'message',
+                'data' => [
+                    'id',
+                    'name',
+                    'email',
+                    'token',
+                ]
+            ])
+            ->seeJson([
+                'message' => 'Login berhasil.',
+                'name' => 'M Fazri Riyadi',
+                'email' => $email,
+            ]);
+    }
+
+    public function test_user_login_fails_with_invalid_credentials()
+    {
+        // Non-existent user
+        $this->json('POST', '/api/auth/login', [
+            'email' => 'nonexistent@smartq.test',
+            'password' => 'password123',
+        ])->seeStatusCode(422)
+          ->seeJson([
+              'message' => 'Email atau kata sandi salah.'
+          ]);
+
+        // Wrong password
+        $email = 'login_fail_' . uniqid() . '@smartq.test';
+        $this->json('POST', '/api/auth/register', [
+            'name' => 'Test User',
+            'email' => $email,
+            'password' => 'password123',
+        ])->seeStatusCode(201);
+
+        $this->json('POST', '/api/auth/login', [
+            'email' => $email,
+            'password' => 'wrongpassword',
+        ])->seeStatusCode(422)
+          ->seeJson([
+              'message' => 'Email atau kata sandi salah.'
+          ]);
+    }
 }
