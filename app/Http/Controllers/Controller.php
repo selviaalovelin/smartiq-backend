@@ -27,4 +27,21 @@ class Controller extends BaseController
     {
         return $this->authenticatedUser($request)->quizzes()->findOrFail($id);
     }
+
+    public function health()
+    {
+        try {
+            \Illuminate\Support\Facades\DB::connection()->getPdo();
+            $dbStatus = 'UP';
+        } catch (\Exception $e) {
+            $dbStatus = 'DOWN';
+        }
+
+        return response()->json([
+            'status' => 'UP',
+            'services' => [
+                'database' => $dbStatus,
+            ]
+        ], $dbStatus === 'UP' ? 200 : 503);
+    }
 }
