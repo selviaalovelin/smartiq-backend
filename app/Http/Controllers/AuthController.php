@@ -129,9 +129,9 @@ class AuthController extends Controller
     private function userData(User $user, $token)
     {
         return [
-            'id' => $user->id,
-            'name' => $user->name,
-            'email' => $user->email,
+            'id' => (int) $user->id,
+            'name' => trim($user->name),
+            'email' => strtolower(trim($user->email)),
             'token' => $token,
         ];
     }
