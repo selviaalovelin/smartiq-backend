@@ -26,8 +26,14 @@ class AssignmentController extends Controller
             'deadline' => 'required|date|after:now',
             'host' => 'nullable|string|max:100',
         ]);
-        if (!$user->quizzes()->whereKey($request->input('quiz_id'))->exists()) {
+
+        $quiz = $user->quizzes()->whereKey($request->input('quiz_id'))->first();
+        if (!$quiz) {
             abort(404);
+        }
+
+        if ($quiz->questions()->count() === 0) {
+            abort(422, 'Kuis belum memiliki soal.');
         }
 
         $assignment = QuizAssignment::create([
