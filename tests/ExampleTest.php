@@ -7,6 +7,8 @@ use Laravel\Lumen\Testing\DatabaseTransactions;
 
 class ExampleTest extends TestCase
 {
+    use DatabaseTransactions;
+
     /**
      * A basic test example.
      *
@@ -40,5 +42,52 @@ class ExampleTest extends TestCase
                     'database' => 'UP'
                 ]
             ]);
+    }
+
+    public function test_user_registration_success()
+    {
+        $email = 'register_test_' . uniqid() . '@smartq.test';
+        $this->json('POST', '/api/auth/register', [
+            'name' => '  M Fazri Riyadi  ',
+            'email' => $email,
+            'password' => 'password123',
+        ]);
+
+        $this->seeStatusCode(201)
+            ->seeJsonStructure([
+                'message',
+                'data' => [
+                    'id',
+                    'name',
+                    'email',
+                    'token',
+                ]
+            ])
+            ->seeJson([
+                'message' => 'Akun berhasil dibuat.',
+                'name' => 'M Fazri Riyadi',
+                'email' => $email,
+            ]);
+    }
+
+    public function test_user_registration_validation_fails()
+    {
+        // Missing fields
+        $this->json('POST', '/api/auth/register', [])
+            ->seeStatusCode(422);
+
+        // Invalid email
+        $this->json('POST', '/api/auth/register', [
+            'name' => 'Test',
+            'email' => 'invalid-email',
+            'password' => 'password123',
+        ])->seeStatusCode(422);
+
+        // Password too short
+        $this->json('POST', '/api/auth/register', [
+            'name' => 'Test',
+            'email' => 'valid@test.com',
+            'password' => 'short',
+        ])->seeStatusCode(422);
     }
 }
