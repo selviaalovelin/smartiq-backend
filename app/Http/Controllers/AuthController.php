@@ -104,13 +104,17 @@ class AuthController extends Controller
         $email = strtolower(trim($request->input('email')));
         $reset = DB::table('password_reset_tokens')->where('email', $email)->first();
 
-        if (!$reset || !hash_equals($reset->token, hash('sha256', $request->input('token')))) {
+        if (!$reset) {
             return response()->json(['message' => 'Link reset kata sandi tidak valid.'], 422);
         }
 
         if (strtotime($reset->created_at) < time() - env('PASSWORD_RESET_EXPIRE', 3600)) {
             DB::table('password_reset_tokens')->where('email', $email)->delete();
             return response()->json(['message' => 'Link reset kata sandi sudah kedaluwarsa.'], 422);
+        }
+
+        if (!hash_equals($reset->token, hash('sha256', $request->input('token')))) {
+            return response()->json(['message' => 'Link reset kata sandi tidak valid.'], 422);
         }
 
         $user = User::where('email', $email)->first();
