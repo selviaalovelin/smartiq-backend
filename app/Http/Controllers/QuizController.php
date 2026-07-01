@@ -118,12 +118,13 @@ class QuizController extends Controller
     public function join(Request $request, $id)
     {
         $quiz = Quiz::with('questions')->findOrFail($id);
-        $this->validate($request, ['name' => 'required|string|max:100']);
-
-        $name = trim($request->input('name'));
-        if (empty($name)) {
+        if (!$request->has('name') || trim($request->input('name')) === '') {
             abort(422, 'Nama tidak boleh kosong.');
         }
+
+        $this->validate($request, ['name' => 'string|max:100']);
+
+        $name = trim($request->input('name'));
 
         $assignmentId = $request->input('assignment_id');
         if ($assignmentId) {
