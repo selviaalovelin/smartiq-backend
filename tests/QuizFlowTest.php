@@ -242,4 +242,36 @@ class QuizFlowTest extends TestCase
         $this->json('GET', '/api/quizzes', [], $headers)
             ->seeStatusCode(401);
     }
+
+    public function test_open_or_start_quiz_without_questions_fails()
+    {
+        $email = 'pengajar-kosong+'.uniqid().'@smartq.test';
+
+        // Register teacher
+        $this->json('POST', '/api/auth/register', [
+            'email' => $email,
+            'password' => 'password123',
+        ])->seeStatusCode(201);
+
+        $token = json_decode($this->response->getContent(), true)['data']['token'];
+        $headers = ['Authorization' => 'Bearer '.$token];
+
+        // Create quiz without questions
+        $this->json('POST', '/api/quizzes', [
+            'title' => 'Kuis Tanpa Soal',
+            'category' => 'Pengujian',
+        ], $headers)->seeStatusCode(201);
+
+        $quiz = json_decode($this->response->getContent(), true)['data'];
+
+        // Try to open quiz
+        $this->json('PUT', '/api/quizzes/'.$quiz['id'].'/open', [], $headers)
+            ->seeStatusCode(422)
+            ->seeJson(['message' => 'Kuis belum memiliki soal.']);
+
+        // Try to start quiz (fails because status is 'draft')
+        $this->json('PUT', '/api/quizzes/'.$quiz['id'].'/start', [], $headers)
+            ->seeStatusCode(422)
+            ->seeJson(['message' => 'Kuis harus dalam status menunggu (waiting) sebelum dimulai.']);
+    }
 }
