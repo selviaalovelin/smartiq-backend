@@ -34,6 +34,14 @@ Jalankan server:
 php -S localhost:8000 -t public
 ```
 
+## Menjalankan Pengujian
+
+Untuk menjalankan rangkaian pengujian (PHPUnit), jalankan perintah berikut di terminal:
+
+```bash
+vendor/bin/phpunit
+```
+
 ## API kuis
 
 1. POST /api/auth/register
