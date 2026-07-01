@@ -50,4 +50,6 @@ php -S localhost:8000 -t public
 12. GET /api/quizzes/{id}/leaderboard
 13. GET /api/assignments
 14. POST /api/assignments
-15. GET /api/health
+15. GET /api/assignments/{id}/participants
+16. DELETE /api/assignments/{id}
+17. GET /api/health
