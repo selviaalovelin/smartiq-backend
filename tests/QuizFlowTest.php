@@ -40,6 +40,39 @@ class QuizFlowTest extends TestCase
         ])->seeStatusCode(200);
     }
 
+    public function test_reset_password_with_expired_token_fails()
+    {
+        $email = 'expired_reset+'.uniqid().'@smartq.test';
+
+        $this->json('POST', '/api/auth/register', [
+            'email' => $email,
+            'password' => 'password123',
+        ])->seeStatusCode(201);
+
+        $plainToken = 'reset-token-expired';
+        // Create an expired token (created 2 hours ago)
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $email],
+            [
+                'token' => hash('sha256', $plainToken),
+                'created_at' => date('Y-m-d H:i:s', time() - 7200),
+            ]
+        );
+
+        $this->json('POST', '/api/auth/reset-password', [
+            'email' => $email,
+            'token' => $plainToken,
+            'password' => 'password456',
+            'password_confirmation' => 'password456',
+        ])->seeStatusCode(422)
+          ->seeJson([
+              'message' => 'Link reset kata sandi sudah kedaluwarsa.'
+          ]);
+
+        // Verify it was deleted from the database
+        $this->assertNull(DB::table('password_reset_tokens')->where('email', $email)->first());
+    }
+
     public function test_new_quiz_with_invalid_questions_is_not_saved()
     {
         $email = 'pengajar-draft+'.uniqid().'@smartq.test';
