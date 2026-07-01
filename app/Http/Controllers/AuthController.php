@@ -108,7 +108,7 @@ class AuthController extends Controller
             return response()->json(['message' => 'Link reset kata sandi tidak valid.'], 422);
         }
 
-        if (strtotime($reset->created_at) < time() - 3600) {
+        if (strtotime($reset->created_at) < time() - env('PASSWORD_RESET_EXPIRE', 3600)) {
             DB::table('password_reset_tokens')->where('email', $email)->delete();
             return response()->json(['message' => 'Link reset kata sandi sudah kedaluwarsa.'], 422);
         }
@@ -139,7 +139,9 @@ class AuthController extends Controller
     private function sendResetLink($email, $resetUrl)
     {
         $subject = 'Reset Kata Sandi SMARTQ';
-        $message = "Halo,\n\nKlik link berikut untuk mengganti kata sandi SMARTQ:\n{$resetUrl}\n\nLink ini berlaku selama 1 jam.\nJika Anda tidak meminta reset, abaikan email ini.";
+        $expireSeconds = (int) env('PASSWORD_RESET_EXPIRE', 3600);
+        $timeText = $expireSeconds >= 3600 ? round($expireSeconds / 3600, 1) . ' jam' : round($expireSeconds / 60) . ' menit';
+        $message = "Halo,\n\nKlik link berikut untuk mengganti kata sandi SMARTQ:\n{$resetUrl}\n\nLink ini berlaku selama {$timeText}.\nJika Anda tidak meminta reset, abaikan email ini.";
         $from = env('MAIL_FROM_ADDRESS', 'no-reply@smartq.local');
         $headers = "From: SMARTQ <{$from}>\r\nContent-Type: text/plain; charset=UTF-8";
 
