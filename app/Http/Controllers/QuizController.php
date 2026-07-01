@@ -237,12 +237,23 @@ class QuizController extends Controller
         ]);
 
         $question = $quiz->questions()->findOrFail($request->input('question_id'));
+
+        $hasAnswered = QuizAnswer::where('participant_id', $participant->id)
+            ->where('quiz_question_id', $question->id)
+            ->exists();
+
+        if ($hasAnswered) {
+            abort(422, 'Anda sudah menjawab pertanyaan ini.');
+        }
+
         $isCorrect = $question->correct === $request->input('selected_option');
 
-        QuizAnswer::updateOrCreate(
-            ['participant_id' => $participant->id, 'quiz_question_id' => $question->id],
-            ['selected_option' => $request->input('selected_option'), 'is_correct' => $isCorrect]
-        );
+        QuizAnswer::create([
+            'participant_id' => $participant->id,
+            'quiz_question_id' => $question->id,
+            'selected_option' => $request->input('selected_option'),
+            'is_correct' => $isCorrect,
+        ]);
 
         $participant->score = $participant->answers()->where('is_correct', true)->count();
         $participant->save();
