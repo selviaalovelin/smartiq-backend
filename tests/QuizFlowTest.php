@@ -40,6 +40,39 @@ class QuizFlowTest extends TestCase
         ])->seeStatusCode(200);
     }
 
+    public function test_reset_password_with_expired_token_fails()
+    {
+        $email = 'expired_reset+'.uniqid().'@smartq.test';
+
+        $this->json('POST', '/api/auth/register', [
+            'email' => $email,
+            'password' => 'password123',
+        ])->seeStatusCode(201);
+
+        $plainToken = 'reset-token-expired';
+        // Create an expired token (created 2 hours ago)
+        DB::table('password_reset_tokens')->updateOrInsert(
+            ['email' => $email],
+            [
+                'token' => hash('sha256', $plainToken),
+                'created_at' => date('Y-m-d H:i:s', time() - 7200),
+            ]
+        );
+
+        $this->json('POST', '/api/auth/reset-password', [
+            'email' => $email,
+            'token' => $plainToken,
+            'password' => 'password456',
+            'password_confirmation' => 'password456',
+        ])->seeStatusCode(422)
+          ->seeJson([
+              'message' => 'Link reset kata sandi sudah kedaluwarsa.'
+          ]);
+
+        // Verify it was deleted from the database
+        $this->assertNull(DB::table('password_reset_tokens')->where('email', $email)->first());
+    }
+
     public function test_new_quiz_with_invalid_questions_is_not_saved()
     {
         $email = 'pengajar-draft+'.uniqid().'@smartq.test';
@@ -208,5 +241,105 @@ class QuizFlowTest extends TestCase
             ->seeStatusCode(200);
         $this->json('GET', '/api/quizzes', [], $headers)
             ->seeStatusCode(401);
+    }
+
+    public function test_open_or_start_quiz_without_questions_fails()
+    {
+        $email = 'pengajar-kosong+'.uniqid().'@smartq.test';
+
+        // Register teacher
+        $this->json('POST', '/api/auth/register', [
+            'email' => $email,
+            'password' => 'password123',
+        ])->seeStatusCode(201);
+
+        $token = json_decode($this->response->getContent(), true)['data']['token'];
+        $headers = ['Authorization' => 'Bearer '.$token];
+
+        // Create quiz without questions
+        $this->json('POST', '/api/quizzes', [
+            'title' => 'Kuis Tanpa Soal',
+            'category' => 'Pengujian',
+        ], $headers)->seeStatusCode(201);
+
+        $quiz = json_decode($this->response->getContent(), true)['data'];
+
+        // Try to open quiz
+        $this->json('PUT', '/api/quizzes/'.$quiz['id'].'/open', [], $headers)
+            ->seeStatusCode(422)
+            ->seeJson(['message' => 'Kuis belum memiliki soal.']);
+
+        // Try to start quiz (fails because status is 'draft')
+        $this->json('PUT', '/api/quizzes/'.$quiz['id'].'/start', [], $headers)
+            ->seeStatusCode(422)
+            ->seeJson(['message' => 'Kuis harus dalam status menunggu (waiting) sebelum dimulai.']);
+    }
+
+    public function test_participant_quiz_flow_and_validation()
+    {
+        $email = 'pengajar-flow+'.uniqid().'@smartq.test';
+
+        // Register teacher
+        $this->json('POST', '/api/auth/register', [
+            'email' => $email,
+            'password' => 'password123',
+        ])->seeStatusCode(201);
+
+        $token = json_decode($this->response->getContent(), true)['data']['token'];
+        $headers = ['Authorization' => 'Bearer '.$token];
+
+        // Create quiz with 1 question
+        $this->json('POST', '/api/quizzes', [
+            'title' => 'Kuis Flow Uji',
+            'category' => 'Uji',
+            'questions' => [[
+                'text' => 'Berapa satu tambah satu?',
+                'answers' => ['Satu', 'Dua', 'Tiga', 'Empat'],
+                'correct' => 'B',
+                'timeLimit' => 10,
+            ]],
+        ], $headers)->seeStatusCode(201);
+
+        $quiz = json_decode($this->response->getContent(), true)['data'];
+        $question = $quiz['questions'][0];
+
+        // Open quiz room
+        $this->json('PUT', '/api/quizzes/'.$quiz['id'].'/open', [], $headers)->seeStatusCode(200);
+
+        // 1. Join with empty name (should fail)
+        $this->json('POST', '/api/quizzes/'.$quiz['id'].'/participants', [
+            'name' => '   ',
+        ])->seeStatusCode(422)
+          ->seeJson(['message' => 'Nama tidak boleh kosong.']);
+
+        // 2. Join participant 1
+        $this->json('POST', '/api/quizzes/'.$quiz['id'].'/participants', [
+            'name' => 'Peserta Satu',
+        ])->seeStatusCode(201);
+
+        $participant1 = json_decode($this->response->getContent(), true)['data']['participant'];
+
+        // 3. Join with duplicate name (should fail)
+        $this->json('POST', '/api/quizzes/'.$quiz['id'].'/participants', [
+            'name' => 'Peserta Satu',
+        ])->seeStatusCode(422)
+          ->seeJson(['message' => 'Nama ini sudah digunakan oleh peserta lain.']);
+
+        // Start the quiz
+        $this->json('PUT', '/api/quizzes/'.$quiz['id'].'/start', [], $headers)->seeStatusCode(200);
+
+        // 4. Submit answer first time
+        $this->json('POST', '/api/quizzes/'.$quiz['id'].'/participants/'.$participant1['id'].'/answers', [
+            'question_id' => $question['id'],
+            'selected_option' => 'B',
+        ])->seeStatusCode(200)
+          ->seeJson(['is_correct' => true, 'score' => 1]);
+
+        // 5. Submit answer second time (should fail)
+        $this->json('POST', '/api/quizzes/'.$quiz['id'].'/participants/'.$participant1['id'].'/answers', [
+            'question_id' => $question['id'],
+            'selected_option' => 'A',
+        ])->seeStatusCode(422)
+          ->seeJson(['message' => 'Anda sudah menjawab pertanyaan ini.']);
     }
 }

@@ -118,7 +118,13 @@ class QuizController extends Controller
     public function join(Request $request, $id)
     {
         $quiz = Quiz::with('questions')->findOrFail($id);
-        $this->validate($request, ['name' => 'required|string|max:100']);
+        if (!$request->has('name') || trim($request->input('name')) === '') {
+            abort(422, 'Nama tidak boleh kosong.');
+        }
+
+        $this->validate($request, ['name' => 'string|max:100']);
+
+        $name = trim($request->input('name'));
 
         $assignmentId = $request->input('assignment_id');
         if ($assignmentId) {
@@ -130,10 +136,19 @@ class QuizController extends Controller
             abort(422, 'Kuis belum dibuka oleh pengajar.');
         }
 
+        $existingParticipant = QuizParticipant::where('quiz_id', $quiz->id)
+            ->where('name', $name)
+            ->when($assignmentId, fn ($q) => $q->where('assignment_id', $assignmentId), fn ($q) => $q->whereNull('assignment_id'))
+            ->exists();
+
+        if ($existingParticipant) {
+            abort(422, 'Nama ini sudah digunakan oleh peserta lain.');
+        }
+
         $participant = QuizParticipant::create([
             'quiz_id' => $quiz->id,
             'assignment_id' => $assignmentId ?: null,
-            'name' => trim($request->input('name')),
+            'name' => $name,
         ]);
 
         return response()->json([
@@ -158,6 +173,9 @@ class QuizController extends Controller
     public function start(Request $request, $id)
     {
         $quiz = $this->ownedQuiz($request, $id);
+        if ($quiz->status !== 'waiting') {
+            abort(422, 'Kuis harus dalam status menunggu (waiting) sebelum dimulai.');
+        }
         if ($quiz->questions()->count() === 0) {
             abort(422, 'Kuis belum memiliki soal.');
         }
@@ -220,12 +238,23 @@ class QuizController extends Controller
         ]);
 
         $question = $quiz->questions()->findOrFail($request->input('question_id'));
+
+        $hasAnswered = QuizAnswer::where('participant_id', $participant->id)
+            ->where('quiz_question_id', $question->id)
+            ->exists();
+
+        if ($hasAnswered) {
+            abort(422, 'Anda sudah menjawab pertanyaan ini.');
+        }
+
         $isCorrect = $question->correct === $request->input('selected_option');
 
-        QuizAnswer::updateOrCreate(
-            ['participant_id' => $participant->id, 'quiz_question_id' => $question->id],
-            ['selected_option' => $request->input('selected_option'), 'is_correct' => $isCorrect]
-        );
+        QuizAnswer::create([
+            'participant_id' => $participant->id,
+            'quiz_question_id' => $question->id,
+            'selected_option' => $request->input('selected_option'),
+            'is_correct' => $isCorrect,
+        ]);
 
         $participant->score = $participant->answers()->where('is_correct', true)->count();
         $participant->save();
@@ -316,15 +345,15 @@ class QuizController extends Controller
         $wrongCount = $participant->answers->where('is_correct', false)->count();
 
         return [
-            'id' => $participant->id,
-            'quiz_id' => $participant->quiz_id,
-            'name' => $participant->name,
-            'score' => $participant->score,
-            'answered_count' => $answeredCount,
-            'correct_count' => $correctCount,
-            'wrong_count' => $wrongCount,
-            'total_questions' => $totalQuestions,
-            'progress_percent' => $totalQuestions ? round(($answeredCount / $totalQuestions) * 100) : 0,
+            'id' => (int) $participant->id,
+            'quiz_id' => (int) $participant->quiz_id,
+            'name' => trim($participant->name),
+            'score' => (int) $participant->score,
+            'answered_count' => (int) $answeredCount,
+            'correct_count' => (int) $correctCount,
+            'wrong_count' => (int) $wrongCount,
+            'total_questions' => (int) $totalQuestions,
+            'progress_percent' => (int) ($totalQuestions ? round(($answeredCount / $totalQuestions) * 100) : 0),
             'created_at' => $participant->created_at,
             'updated_at' => $participant->updated_at,
         ];
